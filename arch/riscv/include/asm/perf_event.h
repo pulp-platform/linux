@@ -22,6 +22,11 @@
 #define RISCV_MAX_COUNTERS	2
 #endif
 
+#ifdef CONFIG_ARIANE_PMU
+#undef  RISCV_MAX_COUNTERS
+#define RISCV_MAX_COUNTERS	16
+#endif
+
 #ifndef RISCV_MAX_COUNTERS
 #error "Please provide a valid RISCV_MAX_COUNTERS for the PMU."
 #endif
@@ -46,6 +51,26 @@
 #define RISCV_PMU_MHPMCOUNTER8	7
 
 #define RISCV_OP_UNSUPP		(-EOPNOTSUPP)
+
+#ifdef CONFIG_ARIANE_PMU
+
+#define  RISCV_OP_L1_ICACHE_MISS   2    // L1 Instr Cache Miss
+#define  RISCV_OP_L1_DCACHE_MISS   3    // L1 Data Cache Miss
+#define  RISCV_OP_ITLB_MISS        4    // ITLB Miss
+#define  RISCV_OP_DTLB_MISS        5    // DTLB Miss
+#define  RISCV_OP_LOAD             6    // Loads
+#define  RISCV_OP_STORE            7    // Stores
+#define  RISCV_OP_EXCEPTION        8    // Taken exceptions
+#define  RISCV_OP_EXCEPTION_RET    9    // Exception return
+#define  RISCV_OP_BRANCH_JUMP      10    // Software change of PC
+#define  RISCV_OP_CALL             11    // Procedure call
+#define  RISCV_OP_RET              12    // Procedure Return
+#define  RISCV_OP_MIS_PREDICT      13    // Branch mis-predicted
+#define  RISCV_OP_SB_FULL          14    // Scoreboard full
+#define  RISCV_OP_IF_EMPTY         15    // instruction fetch queue empty
+// #define  RISCV_OP_DCACHE_RW		   16
+
+#endif
 
 struct cpu_hw_events {
 	/* # currently enabled events*/
