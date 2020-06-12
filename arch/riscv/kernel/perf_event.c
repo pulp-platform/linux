@@ -33,6 +33,7 @@
 #include <asm/perf_event.h>
 #include <asm/sbi.h>
 
+#ifdef CONFIG_ARIANE_PMU
 #define  USE_M_MODE 1
 
 #if USE_M_MODE
@@ -77,6 +78,7 @@
 #define         CSR_SB_FULL           0xC0F  // Scoreboard full
 #define         CSR_IF_EMPTY          0xC10  // instruction fetch queue empty
 
+#endif
 #endif
 
 static const struct riscv_pmu *riscv_pmu __read_mostly;
