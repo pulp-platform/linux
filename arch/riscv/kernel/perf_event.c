@@ -31,14 +31,95 @@
 #include <linux/atomic.h>
 #include <linux/of.h>
 #include <asm/perf_event.h>
+#include <asm/sbi.h>
+
+#ifdef CONFIG_ARIANE_PMU
+#define  USE_M_MODE 1
+
+#if USE_M_MODE
+
+#define         CSR_CYCLE            0xB00
+#define         CSR_INSTRET          0xB02
+// Performance counters (Machine Mode)
+#define         CSR_L1_ICACHE_MISS   0xB03    // L1 Instr Cache Miss
+#define         CSR_L1_DCACHE_MISS   0xB04    // L1 Data Cache Miss
+#define         CSR_ITLB_MISS        0xB05    // ITLB Miss
+#define         CSR_DTLB_MISS        0xB06    // DTLB Miss
+#define         CSR_LOAD             0xB07    // Loads
+#define         CSR_STORE            0xB08    // Stores
+#define         CSR_EXCEPTION        0xB09    // Taken exceptions
+#define         CSR_EXCEPTION_RET    0xB0A    // Exception return
+#define         CSR_BRANCH_JUMP      0xB0B    // Software change of PC
+#define         CSR_CALL             0xB0C    // Procedure call
+#define         CSR_RET              0xB0D    // Procedure Return
+#define         CSR_MIS_PREDICT      0xB0E    // Branch mis-predicted
+#define         CSR_SB_FULL          0xB0F    // Scoreboard full
+#define         CSR_IF_EMPTY         0xB10    // instruction fetch queue empty
+
+#else
+
+// Counters and Timers (User Mode - R/O Shadows)
+#define         CSR_CYCLE             0xC00
+#define         CSR_TIME              0xC01
+#define         CSR_INSTRET           0xC02
+  // Performance counters (User Mode - R/O Shadows)
+#define         CSR_L1_ICACHE_MISS    0xC03  // L1 Instr Cache Miss
+#define         CSR_L1_DCACHE_MISS    0xC04  // L1 Data Cache Miss
+#define         CSR_ITLB_MISS         0xC05  // ITLB Miss
+#define         CSR_DTLB_MISS         0xC06  // DTLB Miss
+#define         CSR_LOAD              0xC07  // Loads
+#define         CSR_STORE             0xC08  // Stores
+#define         CSR_EXCEPTION         0xC09  // Taken exceptions
+#define         CSR_EXCEPTION_RET     0xC0A  // Exception return
+#define         CSR_BRANCH_JUMP       0xC0B  // Software change of PC
+#define         CSR_CALL              0xC0C  // Procedure call
+#define         CSR_RET               0xC0D  // Procedure Return
+#define         CSR_MIS_PREDICT       0xC0E  // Branch mis-predicted
+#define         CSR_SB_FULL           0xC0F  // Scoreboard full
+#define         CSR_IF_EMPTY          0xC10  // instruction fetch queue empty
+
+#endif
+#endif
 
 static const struct riscv_pmu *riscv_pmu __read_mostly;
 static DEFINE_PER_CPU(struct cpu_hw_events, cpu_hw_events);
 
+#ifdef CONFIG_ARIANE_PMU
+static const int riscv_event_idx_csr_map[] = {
+	[RISCV_PMU_CYCLE]		= CSR_CYCLE,
+	[RISCV_PMU_INSTRET]		= CSR_INSTRET,
+	[RISCV_OP_L1_ICACHE_MISS]	= CSR_L1_ICACHE_MISS,
+	[RISCV_OP_L1_DCACHE_MISS]		= CSR_L1_DCACHE_MISS,
+	[RISCV_OP_ITLB_MISS]	= CSR_ITLB_MISS,
+	[RISCV_OP_DTLB_MISS]		= CSR_DTLB_MISS,
+	[RISCV_OP_LOAD]		= CSR_LOAD,
+	[RISCV_OP_STORE]		= CSR_STORE,
+	[RISCV_OP_EXCEPTION]		= CSR_EXCEPTION,
+	[RISCV_OP_EXCEPTION_RET]	= CSR_EXCEPTION_RET,
+	[RISCV_OP_BRANCH_JUMP]		= CSR_BRANCH_JUMP,
+	[RISCV_OP_CALL]	= CSR_CALL,
+	[RISCV_OP_RET]		= CSR_RET,
+	[RISCV_OP_MIS_PREDICT]		= CSR_MIS_PREDICT,
+	[RISCV_OP_SB_FULL]		= CSR_SB_FULL,
+	[RISCV_OP_IF_EMPTY]		= CSR_IF_EMPTY,
+	//[RISCV_OP_DCACHE_RW]	= 0xC11,
+};
+#endif
+
 /*
  * Hardware & cache maps and their methods
  */
-
+#ifdef CONFIG_ARIANE_PMU
+static const int riscv_hw_event_map[] = {
+ 	[PERF_COUNT_HW_CPU_CYCLES]		= RISCV_PMU_CYCLE,
+ 	[PERF_COUNT_HW_INSTRUCTIONS]		= RISCV_PMU_INSTRET,
+ 	[PERF_COUNT_HW_CACHE_REFERENCES]	= RISCV_OP_UNSUPP,
+	[PERF_COUNT_HW_CACHE_MISSES]		= RISCV_OP_UNSUPP,
+	[PERF_COUNT_HW_BRANCH_INSTRUCTIONS]	= RISCV_OP_BRANCH_JUMP,
+	[PERF_COUNT_HW_BRANCH_MISSES]		= RISCV_OP_MIS_PREDICT,
+ 	[PERF_COUNT_HW_BUS_CYCLES]		= RISCV_OP_UNSUPP,
+ };
+#else
 static const int riscv_hw_event_map[] = {
 	[PERF_COUNT_HW_CPU_CYCLES]		= RISCV_PMU_CYCLE,
 	[PERF_COUNT_HW_INSTRUCTIONS]		= RISCV_PMU_INSTRET,
@@ -48,8 +129,99 @@ static const int riscv_hw_event_map[] = {
 	[PERF_COUNT_HW_BRANCH_MISSES]		= RISCV_OP_UNSUPP,
 	[PERF_COUNT_HW_BUS_CYCLES]		= RISCV_OP_UNSUPP,
 };
+#endif
 
 #define C(x) PERF_COUNT_HW_CACHE_##x
+#ifdef CONFIG_ARIANE_PMU
+static const int riscv_cache_event_map[PERF_COUNT_HW_CACHE_MAX]
+[PERF_COUNT_HW_CACHE_OP_MAX]
+[PERF_COUNT_HW_CACHE_RESULT_MAX] = {
+	[C(L1D)] = {
+		[C(OP_READ)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_LOAD,
+			[C(RESULT_MISS)] = RISCV_OP_L1_DCACHE_MISS,
+		},
+		[C(OP_WRITE)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_STORE,
+			[C(RESULT_MISS)] = RISCV_OP_L1_DCACHE_MISS,
+		},
+		[C(OP_PREFETCH)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_LOAD,
+			[C(RESULT_MISS)] = RISCV_OP_L1_DCACHE_MISS,
+		},
+	},
+	[C(L1I)] = {
+		[C(OP_READ)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_IF_EMPTY,
+			[C(RESULT_MISS)] = RISCV_OP_L1_ICACHE_MISS,
+		},
+		[C(OP_WRITE)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_IF_EMPTY,
+			[C(RESULT_MISS)] = RISCV_OP_L1_ICACHE_MISS,
+		},
+		[C(OP_PREFETCH)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_IF_EMPTY,
+			[C(RESULT_MISS)] = RISCV_OP_L1_ICACHE_MISS,
+		},
+	},
+	[C(LL)] = {
+		[C(OP_READ)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_UNSUPP,
+		},
+		[C(OP_WRITE)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_UNSUPP,
+		},
+		[C(OP_PREFETCH)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_UNSUPP,
+		},
+	},
+	[C(DTLB)] = {
+		[C(OP_READ)] = {
+			[C(RESULT_ACCESS)] =  RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] =  RISCV_OP_DTLB_MISS,
+		},
+		[C(OP_WRITE)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_DTLB_MISS,
+		},
+		[C(OP_PREFETCH)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_DTLB_MISS,
+		},
+	},
+	[C(ITLB)] = {
+		[C(OP_READ)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_ITLB_MISS,
+		},
+		[C(OP_WRITE)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_ITLB_MISS,
+		},
+		[C(OP_PREFETCH)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_ITLB_MISS,
+		},
+	},
+	[C(BPU)] = {
+		[C(OP_READ)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_UNSUPP,
+		},
+		[C(OP_WRITE)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_UNSUPP,
+		},
+		[C(OP_PREFETCH)] = {
+			[C(RESULT_ACCESS)] = RISCV_OP_UNSUPP,
+			[C(RESULT_MISS)] = RISCV_OP_UNSUPP,
+		},
+	},
+};
+#else
 static const int riscv_cache_event_map[PERF_COUNT_HW_CACHE_MAX]
 [PERF_COUNT_HW_CACHE_OP_MAX]
 [PERF_COUNT_HW_CACHE_RESULT_MAX] = {
@@ -138,6 +310,7 @@ static const int riscv_cache_event_map[PERF_COUNT_HW_CACHE_MAX]
 		},
 	},
 };
+#endif
 
 static int riscv_map_hw_event(u64 config)
 {
@@ -150,7 +323,14 @@ static int riscv_map_hw_event(u64 config)
 int riscv_map_cache_decode(u64 config, unsigned int *type,
 			   unsigned int *op, unsigned int *result)
 {
+#ifdef CONFIG_ARIANE_PMU
+	*type = config & 0xFF;
+	*op = (config >> 8) & 0xFF;
+	*result = (config >> 16) & 0xFF;
+	return 0;
+#else
 	return -ENOENT;
+#endif
 }
 
 static int riscv_map_cache_event(u64 config)
@@ -183,6 +363,88 @@ static inline u64 read_counter(int idx)
 {
 	u64 val = 0;
 
+#ifdef CONFIG_ARIANE_PMU
+	if (idx >= RISCV_PMU_CYCLE && idx <= RISCV_OP_IF_EMPTY) {
+#if USE_M_MODE
+		if (RISCV_OP_BRANCH_JUMP == idx) {
+			//val = sbi_pmu_csr_read(riscv_event_idx_csr_map[RISCV_OP_EXCEPTION_RET]);
+			//val += sbi_pmu_csr_read(riscv_event_idx_csr_map[RISCV_OP_RET]);
+			//val += sbi_pmu_csr_read(riscv_event_idx_csr_map[RISCV_OP_CALL]);
+			val = sbi_pmu_csr_read(riscv_event_idx_csr_map[RISCV_OP_BRANCH_JUMP]);
+		// } else if (RISCV_OP_DCACHE_RW == idx) {
+		// 	val = sbi_pmu_csr_read(riscv_event_idx_csr_map[RISCV_OP_LOAD]);
+		// 	val += sbi_pmu_csr_read(riscv_event_idx_csr_map[RISCV_OP_STORE]);
+		} else
+			val = sbi_pmu_csr_read(riscv_event_idx_csr_map[idx]);
+#else
+		switch(riscv_event_idx_csr_map[idx]) {
+			case CSR_CYCLE:
+				val = csr_read(CSR_CYCLE);
+				break;
+			case CSR_TIME:
+				val = csr_read(CSR_TIME);
+				break;
+			case CSR_INSTRET:
+				val = csr_read(CSR_INSTRET);
+				break;
+			case CSR_L1_ICACHE_MISS:
+				val = csr_read(CSR_L1_ICACHE_MISS);
+				break;
+			case CSR_L1_DCACHE_MISS:
+				val = csr_read(CSR_L1_DCACHE_MISS);
+				break;
+			case CSR_ITLB_MISS:
+				val = csr_read(CSR_ITLB_MISS);
+				break;
+			case CSR_DTLB_MISS:
+				val = csr_read(CSR_DTLB_MISS);
+				break;
+			case CSR_LOAD:
+				val = csr_read(CSR_LOAD);
+				break;
+			case CSR_STORE:
+				val = csr_read(CSR_STORE);
+				break;
+			// case 0xC11:
+			// 	val = csr_read(CSR_LOAD);
+			// 	val += csr_read(CSR_STORE);
+			// 	break;
+			case CSR_EXCEPTION:
+				val = csr_read(CSR_EXCEPTION);
+				break;
+			case CSR_EXCEPTION_RET:
+				val = csr_read(CSR_EXCEPTION_RET);
+				break;
+			case CSR_BRANCH_JUMP:
+				//val = csr_read(CSR_EXCEPTION_RET);
+				//val += csr_read(CSR_RET);
+				//val += csr_read(CSR_CALL);
+				val = csr_read(CSR_BRANCH_JUMP);
+				break;
+			case CSR_CALL:
+				val = csr_read(CSR_CALL);
+				break;
+			case CSR_RET:
+				val = csr_read(CSR_RET);
+				break;
+			case CSR_MIS_PREDICT:
+				val = csr_read(CSR_MIS_PREDICT);
+				break;
+			case CSR_SB_FULL:
+				val = csr_read(CSR_SB_FULL);
+				break;
+			case CSR_IF_EMPTY:
+				val = csr_read(CSR_IF_EMPTY);
+				break;
+			default:
+				break;
+		}
+#endif
+	} else {
+		WARN_ON_ONCE(idx < 0 ||	idx > RISCV_MAX_COUNTERS);
+		return -EINVAL;
+	}
+#else
 	switch (idx) {
 	case RISCV_PMU_CYCLE:
 		val = csr_read(cycle);
@@ -194,6 +456,7 @@ static inline u64 read_counter(int idx)
 		WARN_ON_ONCE(idx < 0 ||	idx > RISCV_MAX_COUNTERS);
 		return -EINVAL;
 	}
+#endif
 
 	return val;
 }
@@ -452,7 +715,11 @@ static const struct riscv_pmu riscv_base_pmu = {
 	.map_cache_event = riscv_map_cache_event,
 	.cache_events = &riscv_cache_event_map,
 	.counter_width = 63,
+#ifdef CONFIG_ARIANE_PMU
+	.num_counters = RISCV_MAX_COUNTERS + 0,
+#else
 	.num_counters = RISCV_BASE_COUNTERS + 0,
+#endif
 	.handle_irq = &riscv_base_pmu_handle_irq,
 
 	/* This means this PMU has no IRQ. */

@@ -211,6 +211,12 @@ config RISCV_BASE_PMU
 	  feature of perf.  It can run on any RISC-V machines so serves as the
 	  fallback, but this option can also be disable to reduce kernel size.
 
+config ARIANE_PMU
+	bool "Ariane's PMU"
+	default n
+	help
+    Enable Ariane's PMU test code
+
 endmenu
 
 config FPU

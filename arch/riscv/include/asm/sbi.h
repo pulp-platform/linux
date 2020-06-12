@@ -26,6 +26,10 @@
 #define SBI_REMOTE_SFENCE_VMA_ASID 7
 #define SBI_SHUTDOWN 8
 
+#ifdef CONFIG_ARIANE_PMU
+#define SBI_READ_PMU_CSR_COUNTER 9
+#endif
+
 #define SBI_CALL(which, arg0, arg1, arg2) ({			\
 	register uintptr_t a0 asm ("a0") = (uintptr_t)(arg0);	\
 	register uintptr_t a1 asm ("a1") = (uintptr_t)(arg1);	\
@@ -42,6 +46,13 @@
 #define SBI_CALL_0(which) SBI_CALL(which, 0, 0, 0)
 #define SBI_CALL_1(which, arg0) SBI_CALL(which, arg0, 0, 0)
 #define SBI_CALL_2(which, arg0, arg1) SBI_CALL(which, arg0, arg1, 0)
+
+#ifdef CONFIG_ARIANE_PMU
+static inline unsigned long sbi_pmu_csr_read(int csr_idx)
+{
+	return SBI_CALL_1(SBI_READ_PMU_CSR_COUNTER, csr_idx);
+}
+#endif
 
 static inline void sbi_console_putchar(int ch)
 {
