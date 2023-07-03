@@ -252,6 +252,7 @@ static __always_inline void __write_once_size(volatile void *p, void *res, int s
 
 #define __READ_ONCE(x, check)						\
 ({									\
+	__smp_mb();                        \
 	union { typeof(x) __val; char __c[1]; } __u;			\
 	if (check)							\
 		__read_once_size(&(x), __u.__c, sizeof(x));		\
@@ -281,6 +282,7 @@ unsigned long read_word_at_a_time(const void *addr)
 		{ .__val = (__force typeof(x)) (val) }; \
 	__write_once_size(&(x), __u.__c, sizeof(x));	\
 	__u.__val;					\
+	__smp_mb();                        \
 })
 
 #endif /* __KERNEL__ */

@@ -68,6 +68,7 @@ extern unsigned long get_wchan(struct task_struct *p);
 
 static inline void cpu_relax(void)
 {
+	__smp_mb();
 #ifdef __riscv_muldiv
 	int dummy;
 	/* In lieu of a halt instruction, induce a long-latency stall. */
@@ -78,6 +79,7 @@ static inline void cpu_relax(void)
 
 static inline void wait_for_interrupt(void)
 {
+	__smp_mb();
 	__asm__ __volatile__ ("wfi");
 }
 

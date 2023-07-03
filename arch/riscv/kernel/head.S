@@ -144,6 +144,7 @@ relocate:
 	 */
 .Lwait_for_cpu_up:
 	/* FIXME: We should WFI to save some energy here. */
+	fence
 	REG_L sp, (a1)
 	REG_L tp, (a2)
 	beqz sp, .Lwait_for_cpu_up
